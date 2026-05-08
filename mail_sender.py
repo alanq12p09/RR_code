@@ -308,7 +308,7 @@ def send_recommendation_email(result, config):
     summary_to = getattr(config, "MAIL_TO_SUMMARY", [])
     summary_cc = getattr(config, "MAIL_CC_SUMMARY", [])
     if summary_to:
-        subject = f"[Auto] Low RR Recommendation - Full Report - {today_str}"
+        subject = f"[Auto] L220 Low RR Recommendation - Full Report - {today_str}"
         body = (
             f"Hi,\n\n"
             f"The per-GEO recommendation emails have been sent.\n\n"

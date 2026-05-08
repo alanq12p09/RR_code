@@ -42,27 +42,43 @@ MAIL_METHOD = "outlook"
 GEO_RECIPIENTS = {
     "AP": {
         "enabled": True,
-        "to": ["xuecz1@lenovo.com"],
+        "to": [
+            "xuecz1@lenovo.com",
+            "wangying62@lenovo.com",
+            "lina6@lenovo.com",
+            "zhangchun6@lenovo.com",
+            "bveeraraghav@lenovo.com",
+            "wuguihua@lenovo.com",
+        ],
         "cc": [],
     },
     "BRAZ": {
-        "enabled": False,
-        "to": ["braz_planner@company.com"],
+        "enabled": True,
+        "to": [
+            "xuecz1@lenovo.com",
+            "dsilva23@lenovo.com",
+            "greis1@lenovo.com",
+            "wuguihua@lenovo.com",
+        ],
         "cc": [],
     },
     "EMEA": {
-        "enabled": False,
-        "to": ["xuecz1@lenovo.com"],
-        "cc": [],
-    },
-    "LAS": {
-        "enabled": False,
-        "to": ["las_planner@company.com"],
+        "enabled": True,
+        "to": [
+            "xuecz1@lenovo.com",
+            "atusekova@lenovo.com",
+            "wuguihua@lenovo.com",
+        ],
         "cc": [],
     },
     "NA": {
         "enabled": True,
-        "to": ["xuecz1@lenovo.com;"],
+        "to": [
+            "xuecz1@lenovo.com",
+            "tangfeng1@lenovo.com",
+            "ugautam1@lenovo.com",
+            "wuguihua@lenovo.com",
+        ],
         "cc": [],
     },
     "PRC": {
@@ -70,14 +86,58 @@ GEO_RECIPIENTS = {
         "to": ["prc_planner@company.com"],
         "cc": [],
     },
+    "LAS": {
+        "enabled": True,
+        "to": [
+            "xuecz1@lenovo.com",
+            "cguzman@lenovo.com",
+            "gmhernandez@lenovo.com",
+            "wuguihua@lenovo.com",
+        ],
+        "cc": [],
+    },
 }
+
+# GEO_RECIPIENTS = {
+#     "AP": {
+#         "enabled": True,
+#         "to": ["xuecz1@lenovo.com,liuhw23@lenovo.com"],
+#         "cc": [],
+#     },
+#     "BRAZ": {
+#         "enabled": False,
+#         "to": ["braz_planner@company.com"],
+#         "cc": [],
+#     },
+#     "EMEA": {
+#         "enabled": False,
+#         "to": ["xuecz1@lenovo.com"],
+#         "cc": [],
+#     },
+#     "LAS": {
+#         "enabled": False,
+#         "to": ["las_planner@company.com"],
+#         "cc": [],
+#     },
+#     "NA": {
+#         "enabled": True,
+#         "to": ["xuecz1@lenovo.com,liuhw23@lenovo.com"],
+#         "cc": [],
+#     },
+#     "PRC": {
+#         "enabled": False,
+#         "to": ["prc_planner@company.com"],
+#         "cc": [],
+#     },
+# }
+
 
 # 汇总报告收件人（可选，收到完整报告；留空则不发汇总）
 #MAIL_TO_SUMMARY = ["xuecz1@lenovo.com ; wuguihua@lenovo.com ; zhouxx10@lenovo.com"]
-MAIL_TO_SUMMARY = ["xuecz1@lenovo.com"]
+MAIL_TO_SUMMARY = ["xuecz1@lenovo.com;zhouxx10@lenovo.com;wuguihua@lenovo.com;huangjin@lenovo.com;xuhy1@lenovo.com;zhangxj1@lenovo.com"]
 MAIL_CC_SUMMARY = []
 
-MAIL_SUBJECT_TEMPLATE = "[Auto] Low RR Recommendation - {geo} - {data_max_month}"
+MAIL_SUBJECT_TEMPLATE = "[Auto] L220 Low RR Recommendation - {geo} - {data_max_month}"
 MAIL_BODY_TEMPLATE = """Hi Team,
 
 Please find the attached Low RR Recommendation for {geo}.

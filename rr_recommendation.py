@@ -74,30 +74,71 @@ GROUP BY
 # 数据清洗
 # ====================================================================
 
+# 需要从 PN Information 表带入主表（Recommendation）的附加信息列
+# key = 输出列名；value = 源表中可能的列名（按优先级，大小写/空格不敏感）
+PN_ATTR_COLUMNS = {
+    "Description": ["Description"],
+    "Category2(Adjusted)": ["Category2(Adjusted)", "Category2 (Adjusted)"],
+    "Planning": ["Planning"],
+}
+
+
 def load_pn_info(pn_info_path):
     df = pd.read_excel(pn_info_path)
     df.columns = [str(c).strip() for c in df.columns]
 
+    # 大小写/空格不敏感的列名查找
+    norm = {c.upper().replace(" ", ""): c for c in df.columns}
+
+    def find_col(candidates):
+        for cand in candidates:
+            key = cand.upper().replace(" ", "")
+            if key in norm:
+                return norm[key]
+        return None
+
     rename_map = {}
-    for c in df.columns:
-        cu = c.upper()
-        if cu in ["PN", "MTM", "PART NUMBER", "MATERIAL"]:
-            rename_map[c] = "PN"
-        elif cu in ["COMMENTS", "COMMENT", "REMARK", "REMARKS"]:
-            rename_map[c] = "Comments"
-        elif cu in ["CATEGORY1", "CATEGORY 1", "BU"]:
-            rename_map[c] = "Category1"
+
+    # PN（连接键）：与 RR 数据的 mtm 对应
+    pn_src = find_col(["PN", "MTM", "Part Number", "Material"])
+    if pn_src:
+        rename_map[pn_src] = "PN"
+
+    # Comments：用于识别 EOL/LTB/LTS（优先用 Comments，兼容旧表的 Remark）
+    cmt_src = find_col(["Comments", "Comment", "Remark", "Remarks"])
+    if cmt_src:
+        rename_map[cmt_src] = "Comments"
+
+    # Category1：用于排除 DOCK 品类（新表列名为 Category1(BU)，优先于纯 BU 列）
+    cat1_src = find_col(["Category1(BU)", "Category1", "Category 1", "BU"])
+    if cat1_src:
+        rename_map[cat1_src] = "Category1"
+
+    # 需要带入主表的附加信息列
+    for out_name, candidates in PN_ATTR_COLUMNS.items():
+        src = find_col(candidates)
+        if src:
+            rename_map[src] = out_name
 
     df = df.rename(columns=rename_map)
 
     required = ["PN", "Comments", "Category1"]
     missing = [c for c in required if c not in df.columns]
     if missing:
-        raise ValueError(f"PN_INFO 缺少必要列: {missing}")
+        raise ValueError(f"PN_INFO 缺少必要列: {missing}（源文件: {pn_info_path}）")
 
     df["PN"] = df["PN"].astype(str).str.strip()
     df["Comments"] = df["Comments"].fillna("").astype(str)
     df["Category1"] = df["Category1"].fillna("").astype(str).str.upper().str.strip()
+
+    # 附加信息列：缺失则补空列并告警，避免整体中断
+    for out_name in PN_ATTR_COLUMNS:
+        if out_name not in df.columns:
+            logger.warning(f"PN_INFO 缺少附加信息列 '{out_name}'，主表中该列将为空")
+            df[out_name] = ""
+        else:
+            df[out_name] = df[out_name].fillna("").astype(str).str.strip()
+
     return df
 
 
@@ -401,7 +442,8 @@ def _get_recommendation_base(rr_filtered, summary, current_month, include_curren
 def build_recommendation(rr_filtered, summary, time_windows, pn_remarks,
                          include_current_month=False,
                          ap_subgeo_min_rr=5,
-                         ap_subgeo_min_share=0.03):
+                         ap_subgeo_min_share=0.03,
+                         pn_attrs=None):
     """
     非AP：按 PN + GEO 直接算 trimmed_mean
     AP：先算 PN + AP，再按 SubGeo 历史占比分配
@@ -601,8 +643,17 @@ def build_recommendation(rr_filtered, summary, time_windows, pn_remarks,
             rec[c] = rec[c].astype(object)
             rec.loc[has_remark, c] = "-"
 
+    # ---------- 附加信息列（来自 PN Information 表，按 PN 带入主表）----------
+    pn_attr_cols = list(PN_ATTR_COLUMNS.keys())
+    if pn_attrs is not None and not pn_attrs.empty:
+        rec = rec.merge(pn_attrs, on="PN", how="left")
+        for c in pn_attr_cols:
+            if c in rec.columns:
+                rec[c] = rec[c].fillna("")
+
     # ---------- 整理列顺序 ----------
-    base_cols = ["PN", "Geo", "SubGeo", "Recommend_Level", "Recommend_To"]
+    base_cols = (["PN"] + pn_attr_cols
+                 + ["Geo", "SubGeo", "Recommend_Level", "Recommend_To"])
     mid_cols = rr_cols + ["Recommended_RR"] + future_cols + ["Remark"]
     stat_cols = ["Month_Count", "Hist_Min", "Hist_Max", "Hist_Avg",
                  "SubGeo_Hist_Qty", "AP_Hist_Qty", "SubGeo_Share", "AP_Geo_Recommended_RR"]
@@ -839,6 +890,12 @@ def run_recommendation(pn_info_path, output_path, kickoff_path,
     pn_info = load_pn_info(pn_info_path)
     _, valid_pn = filter_pn_info(pn_info)
 
+    # 带入主表的 PN 附加信息（按 PN 去重，避免合并时行数膨胀）
+    pn_attrs = (
+        pn_info[["PN"] + list(PN_ATTR_COLUMNS.keys())]
+        .drop_duplicates(subset=["PN"], keep="first")
+    )
+
     kickoff_df = load_kickoff(kickoff_path)
 
     time_windows = get_time_windows(rr)
@@ -864,7 +921,8 @@ def run_recommendation(pn_info_path, output_path, kickoff_path,
         pn_remarks=pn_remarks,
         include_current_month=include_current_month,
         ap_subgeo_min_rr=ap_subgeo_min_rr,
-        ap_subgeo_min_share=ap_subgeo_min_share
+        ap_subgeo_min_share=ap_subgeo_min_share,
+        pn_attrs=pn_attrs
     )
 
     # 生成各 GEO 上传模板（通用框架）

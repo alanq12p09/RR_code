@@ -19,7 +19,7 @@ AP_SUBGEO_MIN_SHARE = 0.01            # AP分配后占比下限（3%）
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(os.path.dirname(BASE_DIR), "Data")
 
-PN_INFO_PATH = r"C:\Users\xuecz1\OneDrive - Lenovo\Option Share Files - DeptDocument\Power BI Group\PN Information.xlsx"
+PN_INFO_PATH = r"C:\Users\xuecz1\OneDrive - Lenovo\Option Share Files - DeptDocument\Power BI Group\ACC PN Information.xlsx"
 KICKOFF_PATH = r"C:\Users\xuecz1\OneDrive - Lenovo\Option Share Files - DeptDocument\Power BI Group\DataSource\Kickoff Package\Accessories Commercial&Consumer KickOff Package.xlsx"
 _TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
 

@@ -49,6 +49,7 @@ GEO_RECIPIENTS = {
             "zhangchun6@lenovo.com",
             "bveeraraghav@lenovo.com",
             "wuguihua@lenovo.com",
+            "sler1@lenovo.com",
         ],
         "cc": [],
     },
@@ -101,7 +102,7 @@ GEO_RECIPIENTS = {
 # GEO_RECIPIENTS = {
 #     "AP": {
 #         "enabled": True,
-#         "to": ["xuecz1@lenovo.com,liuhw23@lenovo.com"],
+#         "to": ["xuecz1@lenovo.com"],
 #         "cc": [],
 #     },
 #     "BRAZ": {
@@ -121,7 +122,7 @@ GEO_RECIPIENTS = {
 #     },
 #     "NA": {
 #         "enabled": True,
-#         "to": ["xuecz1@lenovo.com,liuhw23@lenovo.com"],
+#         "to": ["xuecz1@lenovo.com"],
 #         "cc": [],
 #     },
 #     "PRC": {
@@ -137,10 +138,10 @@ GEO_RECIPIENTS = {
 MAIL_TO_SUMMARY = ["xuecz1@lenovo.com;zhouxx10@lenovo.com;wuguihua@lenovo.com;huangjin@lenovo.com;xuhy1@lenovo.com;zhangxj1@lenovo.com"]
 MAIL_CC_SUMMARY = []
 
-MAIL_SUBJECT_TEMPLATE = "[Auto] L220 Low RR Recommendation - {geo} - {data_max_month}"
+MAIL_SUBJECT_TEMPLATE = "[Auto] L220 Low RR MTM Forecast Recommendation - {geo} - {data_max_month}"
 MAIL_BODY_TEMPLATE = """Hi Team,
 
-Please find the attached Low RR Recommendation for {geo}.
+Please find the attached Low RR MTM Forecast Recommendation for {geo}.
 
 Summary:
 - Report Date: {date}

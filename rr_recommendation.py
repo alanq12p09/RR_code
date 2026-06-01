@@ -78,7 +78,7 @@ GROUP BY
 # key = 输出列名；value = 源表中可能的列名（按优先级，大小写/空格不敏感）
 PN_ATTR_COLUMNS = {
     "Description": ["Description"],
-    "Category2(Adjusted)": ["Category2(Adjusted)", "Category2 (Adjusted)"],
+    "Category1": ["Category1(BU)"],
     "Planning": ["Planning"],
 }
 

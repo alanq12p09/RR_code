@@ -212,12 +212,12 @@ def prepare_rr(rr_raw):
 
 def filter_pn_info(pn_info):
     """
-    不再排除 EOL/LTB/LTS，只排除 DOCK 品类。
+    不再排除 EOL/LTB/LTS/DOCK。
     EOL/LTB/LTS 状态在后续通过 Remark 列标记。
     """
     df = pn_info.copy()
-    df["Exclude_By_DOCK"] = df["Category1"].eq("DOCK")
-    df["Valid_PN"] = ~df["Exclude_By_DOCK"]
+    df["Exclude_By_DOCK"] = False
+    df["Valid_PN"] = True
 
     valid_pn = df.loc[df["Valid_PN"], ["PN"]].drop_duplicates()
     return df, valid_pn
@@ -373,6 +373,11 @@ def build_geo_pn_summary(rr, valid_pn, time_windows, min_recent_months=3):
     summary["Avg_RollingQ"] = summary["Avg_RollingQ"].fillna(0)
     summary["RollingQ_With_Data"] = rq_nonzero_count.fillna(0).astype(int)
     summary["Flag_Avg_RollingQ_LT_500"] = summary["Avg_RollingQ"] < 500
+    summary["RR_500_Flag"] = np.where(
+        summary["Avg_RollingQ"] < 500,
+        "<500",
+        ">=500"
+    )
 
     # 条件2：最近4个月中至少 min_recent_months 个月有RR
     recent_rr_detail = geo_pn_month.loc[geo_pn_month["RSD_Month"].isin(recent_4m)].copy()
@@ -405,12 +410,33 @@ def build_geo_pn_summary(rr, valid_pn, time_windows, min_recent_months=3):
         (summary["Geo_Share_of_PN"] < 0.03)
     )
 
-    summary["Qualified"] = (
-        summary["Flag_Avg_RollingQ_LT_500"] &
+    def build_filter_mark(row):
+        marks = []
+        if row["RR_500_Flag"] == "<500":
+            if not row["Flag_Recent4M_HasRR"]:
+                marks.append("Recent 4M RR not continuous")
+            if not row["Flag_Enough_History"]:
+                marks.append("History < 4 months")
+            if row["Exclude_Geo_LowShare_When_PNHigh"]:
+                marks.append("High PN total but GEO share <3%")
+        elif not row["Flag_Recent4M_HasRR"]:
+            marks.append("Recent 4M RR not continuous")
+        return "; ".join(marks) if marks else "OK"
+
+    summary["Filter_Mark"] = summary.apply(build_filter_mark, axis=1)
+
+    low_rr_eligible = (
+        (summary["RR_500_Flag"] == "<500") &
         summary["Flag_Recent4M_HasRR"] &
         summary["Flag_Enough_History"] &
         (~summary["Exclude_Geo_LowShare_When_PNHigh"])
     )
+    high_rr_eligible = (
+        (summary["RR_500_Flag"] == ">=500") &
+        summary["Flag_Recent4M_HasRR"]
+    )
+    summary["Recommendation_Eligible"] = low_rr_eligible | high_rr_eligible
+    summary["Qualified"] = True
 
     return summary, rr2
 
@@ -432,8 +458,8 @@ def trimmed_mean(series):
 
 
 def _get_recommendation_base(rr_filtered, summary, current_month, include_current_month=False):
-    qualified_keys = summary.loc[summary["Qualified"], ["PN", "Geo"]].drop_duplicates()
-    base = rr_filtered.merge(qualified_keys, on=["PN", "Geo"], how="inner").copy()
+    retained_keys = summary.loc[summary["Qualified"], ["PN", "Geo"]].drop_duplicates()
+    base = rr_filtered.merge(retained_keys, on=["PN", "Geo"], how="inner").copy()
     if not include_current_month:
         base = base.loc[base["RSD_Month"] < current_month].copy()
     return base
@@ -455,6 +481,9 @@ def build_recommendation(rr_filtered, summary, time_windows, pn_remarks,
     base = _get_recommendation_base(
         rr_filtered, summary, current_month, include_current_month
     )
+    summary_marks = summary[
+        ["PN", "Geo", "RR_500_Flag", "Filter_Mark", "Recommendation_Eligible"]
+    ].drop_duplicates()
 
     # ---------- 非 AP ----------
     non_ap = base.loc[base["Geo"] != "AP"].copy()
@@ -571,15 +600,9 @@ def build_recommendation(rr_filtered, summary, time_windows, pn_remarks,
     ap_result["Hist_Max"] = ap_result["AP_Hist_Max"]
     ap_result["Hist_Avg"] = ap_result["AP_Hist_Avg"]
 
-    # 双重过滤
-    ap_before = len(ap_result)
-    ap_result = ap_result.loc[
-        (ap_result["Recommended_RR"] >= ap_subgeo_min_rr) &
-        (ap_result["SubGeo_Share"] >= ap_subgeo_min_share)
-    ].copy()
-    ap_dropped = ap_before - len(ap_result)
-    if ap_dropped > 0:
-        logger.info(f"AP SubGeo 双重过滤: {ap_dropped} 行被移除")
+    # AP SubGeo 阈值仅作为标记使用，不再删除行。
+    ap_result["AP_SubGeo_Min_RR_Flag"] = ap_result["Recommended_RR"] < ap_subgeo_min_rr
+    ap_result["AP_SubGeo_Min_Share_Flag"] = ap_result["SubGeo_Share"] < ap_subgeo_min_share
 
     # AP SubGeo级历史月度pivot
     ap_subgeo_month = ap.groupby(["PN", "Geo", "SubGeo", "RSD_Month"], as_index=False)["Qty"].sum()
@@ -594,24 +617,46 @@ def build_recommendation(rr_filtered, summary, time_windows, pn_remarks,
     non_ap_result["AP_Hist_Qty"] = np.nan
     non_ap_result["SubGeo_Share"] = np.nan
     non_ap_result["AP_Geo_Recommended_RR"] = np.nan
+    non_ap_result["AP_SubGeo_Min_RR_Flag"] = False
+    non_ap_result["AP_SubGeo_Min_Share_Flag"] = False
 
     rec = pd.concat([non_ap_result, ap_result], ignore_index=True)
+    rec = rec.merge(summary_marks, on=["PN", "Geo"], how="left")
+
+    ap_low_rr = (rec["Geo"] == "AP") & (rec["RR_500_Flag"] == "<500")
+    ap_subgeo_low_share_flag = ap_low_rr & (
+        rec["AP_SubGeo_Min_RR_Flag"].fillna(False) |
+        rec["AP_SubGeo_Min_Share_Flag"].fillna(False)
+    )
+
+    def append_filter_mark(existing, mark):
+        if pd.isna(existing) or existing == "" or existing == "OK":
+            return mark
+        if mark in str(existing).split("; "):
+            return existing
+        return f"{existing}; {mark}"
+
+    rec.loc[ap_subgeo_low_share_flag, "Filter_Mark"] = rec.loc[
+        ap_subgeo_low_share_flag, "Filter_Mark"
+    ].apply(lambda x: append_filter_mark(x, "AP SubGeo share too low"))
 
     # ---------- Remark 列 ----------
     rec["Remark"] = rec["PN"].map(pn_remarks).fillna("NULL")
+    rec["Recommendation_Eligible"] = rec["Recommendation_Eligible"].fillna(False)
+    can_recommend = rec["Recommendation_Eligible"] & (rec["Remark"] == "NULL")
 
     # ---------- 未来3个月列 ----------
     for fm in future_3m:
         col_name = fm.strftime("%Y-%b")
         rec[col_name] = np.where(
-            rec["Remark"] == "NULL",
+            can_recommend,
             rec["Recommended_RR"],
             np.nan  # 先用nan占位，后面统一替换
         )
 
-    # ---------- 有 Remark 的行，推荐值和未来月显示 '-' ----------
-    has_remark = rec["Remark"] != "NULL"
-    rec.loc[has_remark, "Recommended_RR"] = np.nan
+    # ---------- 不给推荐值的行，推荐值和未来月显示 '-' ----------
+    no_recommendation = ~can_recommend
+    rec.loc[no_recommendation, "Recommended_RR"] = np.nan
 
     # ---------- 整理历史月度列名：RSD_Month timestamp -> "RR-YYYY-MM" ----------
     month_cols_map = {}
@@ -636,12 +681,12 @@ def build_recommendation(rr_filtered, summary, time_windows, pn_remarks,
     if "SubGeo_Share" in rec.columns:
         rec["SubGeo_Share"] = pd.to_numeric(rec["SubGeo_Share"], errors="coerce").round(4)
 
-    # ---------- 有 Remark 的行数值列替换为 '-' ----------
+    # ---------- 不给推荐值的行数值列替换为 '-' ----------
     display_cols = ["Recommended_RR"] + future_cols
     for c in display_cols:
         if c in rec.columns:
             rec[c] = rec[c].astype(object)
-            rec.loc[has_remark, c] = "-"
+            rec.loc[no_recommendation, c] = "-"
 
     # ---------- 附加信息列（来自 PN Information 表，按 PN 带入主表）----------
     pn_attr_cols = list(PN_ATTR_COLUMNS.keys())
@@ -653,7 +698,8 @@ def build_recommendation(rr_filtered, summary, time_windows, pn_remarks,
 
     # ---------- 整理列顺序 ----------
     base_cols = (["PN"] + pn_attr_cols
-                 + ["Geo", "SubGeo", "Recommend_Level", "Recommend_To"])
+                 + ["Geo", "SubGeo", "RR_500_Flag", "Filter_Mark",
+                    "Recommendation_Eligible", "Recommend_Level", "Recommend_To"])
     mid_cols = rr_cols + ["Recommended_RR"] + future_cols + ["Remark"]
     stat_cols = ["Month_Count", "Hist_Min", "Hist_Max", "Hist_Avg",
                  "SubGeo_Hist_Qty", "AP_Hist_Qty", "SubGeo_Share", "AP_Geo_Recommended_RR"]
@@ -953,7 +999,8 @@ def run_recommendation(pn_info_path, output_path, kickoff_path,
             time_windows["data_max_month"].strftime("%Y-%m"),
             f"最近4个月中至少 {min_recent_months} 个月有RR",
             f"先算AP的Geo recommendation，再按SubGeo历史占比分配，"
-            f"双重过滤：绝对值 < {ap_subgeo_min_rr} 或占比 < {ap_subgeo_min_share:.0%} 的行被移除",
+            f"AP SubGeo阈值仅对<500行做标记：绝对值 < {ap_subgeo_min_rr} "
+            f"或占比 < {ap_subgeo_min_share:.0%}",
             "EOL/LTB/LTS从Comments识别，NPI从KickOff表GA Date最近6个月识别，有Remark的不提供建议值",
         ]
     })

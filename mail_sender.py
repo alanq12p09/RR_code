@@ -308,16 +308,27 @@ def send_recommendation_email(result, config):
     summary_to = getattr(config, "MAIL_TO_SUMMARY", [])
     summary_cc = getattr(config, "MAIL_CC_SUMMARY", [])
     if summary_to:
-        subject = f"[Auto] L220 Low RR Recommendation - Full Report - {today_str}"
+        subject = f"[Auto] L220 Smart Demand Proposal - Full Report - {today_str}"
         body = (
             f"Hi,\n\n"
-            f"The per-GEO recommendation emails have been sent.\n\n"
+            f"The per-GEO L220 Smart Demand Proposal emails have been sent.\n\n"
             f"Summary:\n"
             f"- Report Date: {today_str}\n"
             f"- Data Max Month: {data_max_month}\n"
-            f"- Total Recommendation Rows: {len(rec_df)}\n"
+            f"- Total Proposal Rows: {len(rec_df)}\n"
             f"- GEOs Sent: {sent_count}\n"
             f"- GEOs Skipped: {skipped_geos if skipped_geos else 'None'}\n\n"
+            f"Scope & Flag Notes:\n"
+            f"- Scope: All PN x GEO records from the RR data scope are retained, including DOCK. "
+            f"EOL/LTB/LTS and NPI items are also retained for visibility.\n"
+            f"- RR_500_Flag: Marks whether the rolling RR average is <500 or >=500.\n"
+            f"- Filter_Mark: Explains why a row needs attention, such as recent 4M RR not continuous, "
+            f"history < 4 months, high PN total but GEO share <3%, or AP SubGeo share too low.\n"
+            f"- Recommendation_Eligible: Indicates whether the row is eligible for a proposal value. "
+            f"Rows that are not eligible, or have EOL/LTB/LTS/NPI remarks, use '-' as the proposal placeholder.\n"
+            f"- >=500 rows: Only the recent 4M RR continuity rule is checked.\n"
+            f"- <500 rows: The original exclusion rules are kept as eligibility checks and marks. "
+            f"AP SubGeo threshold checks are only marked, not removed.\n\n"
             f"Full report is attached.\n\n"
             f"Best Regards,\nChaozhong Xue"
         )

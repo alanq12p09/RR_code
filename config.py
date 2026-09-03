@@ -138,15 +138,23 @@ GEO_RECIPIENTS = {
 MAIL_TO_SUMMARY = ["xuecz1@lenovo.com;zhouxx10@lenovo.com;wuguihua@lenovo.com;huangjin@lenovo.com;xuhy1@lenovo.com;zhangxj1@lenovo.com"]
 MAIL_CC_SUMMARY = []
 
-MAIL_SUBJECT_TEMPLATE = "[Auto] L220 Low RR MTM Forecast Recommendation - {geo} - {data_max_month}"
+MAIL_SUBJECT_TEMPLATE = "[Auto] L220 Smart Demand Proposal - {geo} - {data_max_month}"
 MAIL_BODY_TEMPLATE = """Hi Team,
 
-Please find the attached Low RR MTM Forecast Recommendation for {geo}.
+Please find the attached L220 Smart Demand Proposal for {geo}.
 
 Summary:
 - Report Date: {date}
 - Data Max Month: {data_max_month}
-- Recommendation Rows ({geo}): {recommendation_count}
+- Proposal Rows ({geo}): {recommendation_count}
+
+Scope & Flag Notes:
+- Scope: All PN x GEO records from the RR data scope are retained, including DOCK. EOL/LTB/LTS and NPI items are also retained for visibility.
+- RR_500_Flag: Marks whether the rolling RR average is <500 or >=500.
+- Filter_Mark: Explains why a row needs attention, such as recent 4M RR not continuous, history < 4 months, high PN total but GEO share <3%, or AP SubGeo share too low.
+- Recommendation_Eligible: Indicates whether the row is eligible for a proposal value. Rows that are not eligible, or have EOL/LTB/LTS/NPI remarks, use '-' as the proposal placeholder.
+- >=500 rows: Only the recent 4M RR continuity rule is checked.
+- <500 rows: The original exclusion rules are kept as eligibility checks and marks. AP SubGeo threshold checks are only marked, not removed.
 
 This is an automated email. Please do not reply directly.
 
